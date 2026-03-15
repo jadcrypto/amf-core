@@ -1,0 +1,17 @@
+include README.md
+include LICENSE
+include pyproject.toml
+include setup.py
+include amf.py
+include config.py
+include main.py
+
+recursive-include core *.py
+recursive-include engine *.py
+recursive-include cli *.py
+
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude *.cell
+global-exclude manifest.json
+global-exclude tokenizer.json

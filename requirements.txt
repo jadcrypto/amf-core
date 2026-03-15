@@ -1,0 +1,7 @@
+# Atomic Model Fragmentation (AMF) System
+# Core dependencies
+
+numpy>=1.24.0
+gguf>=0.1.0
+rich>=13.0.0
+scikit-learn>=1.3.0
