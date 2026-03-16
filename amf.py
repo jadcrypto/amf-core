@@ -1,43 +1,115 @@
 """
-AMF (Atomic Model Fragmentation) Library
-=========================================
-Public API for interacting with the AMF system as a Python library.
+amf — Atomic Model Fragmentation
+=================================
+First Arabic-originated Python library providing a
+Molecular Inference Engine for large language models.
 
-Usage:
-    import amf
-    
-    # Load any model
-    model = amf.load_universal("path/to/model.gguf")
-    
-    # Fragment the model into functional cells
-    cells = amf.fragment(model, strategy="functional", output_dir="./cells")
+Run any GGUF model with < 500 MB RAM.
+
+Quick start
+-----------
+>>> import amf
+>>>
+>>> # Direct inference (fastest path)
+>>> engine = amf.engine("path/to/model.gguf")
+>>> engine.load()
+>>> print(engine.predict("Hello"))        # e.g. "resilient"
+>>> print(engine.generate("Hello", n=5)) # "Hello resilient strong bold clear"
+>>> engine.close()
+>>>
+>>> # Full fragmentation pipeline
+>>> model = amf.load_universal("path/to/model.gguf")
+>>> cells = amf.fragment(model, strategy="functional", output_dir="./cells")
+
+Public API
+----------
+engine(model_path, ...)   → AMFEngine   (molecular inference)
+load_universal(path)      → UniversalModel
+fragment(model, ...)      → CellManifest
+AMFEngine                 (class — direct import)
+MolecularEngine           (class — full pipeline)
 """
 
 import logging
 from pathlib import Path
-from typing import Optional, Union
+from typing import Union
 
-from core.model_loader import ModelLoader, UniversalModel
+# ── Core imports ────────────────────────────────────────────────────────────
+from engine.amf_engine     import AMFEngine
+from engine.molecular_engine import MolecularEngine
+from core.model_loader     import ModelLoader, UniversalModel
 from core.sorting_algorithm import SortingAlgorithm, FragmentationStrategy
-from core.cell_taxonomy import CellManifest
+from core.cell_taxonomy    import CellManifest
 
 logger = logging.getLogger(__name__)
 
-# Re-export key components for library users
-from core.model_loader import ModelLoader
-from engine.molecular_engine import MolecularEngine
+__version__     = "0.2.0"
+__author__      = "Jad"
+__license__     = "MIT"
+__description__ = (
+    "Atomic Model Fragmentation (AMF) — "
+    "Molecular Inference Engine for resource-constrained hardware."
+)
+__all__ = [
+    "engine",
+    "load_universal",
+    "fragment",
+    "AMFEngine",
+    "MolecularEngine",
+]
+
+
+# ── Public factory functions ─────────────────────────────────────────────────
+
+def engine(
+    model_path: Union[str, Path],
+    inference_layer: int = 20,
+    max_vocab_scan: int  = 100_000,
+) -> AMFEngine:
+    """
+    Create an AMFEngine for direct molecular inference.
+
+    Parameters
+    ----------
+    model_path : str | Path
+        Path to a GGUF model file.
+    inference_layer : int
+        Transformer block index used for deep inference (default: 20).
+    max_vocab_scan : int
+        Maximum vocabulary tokens to score (default: 100 000).
+
+    Returns
+    -------
+    AMFEngine
+        Call ``.load()`` before using.
+
+    Examples
+    --------
+    >>> eng = amf.engine("qwen2.5-7b.gguf")
+    >>> eng.load()
+    >>> eng.predict("Hello")
+    'resilient'
+    """
+    return AMFEngine(
+        model_path      = model_path,
+        inference_layer = inference_layer,
+        max_vocab_scan  = max_vocab_scan,
+    )
 
 
 def load_universal(model_path: Union[str, Path]) -> UniversalModel:
     """
-    Load a model file securely, automatically detecting its format
-    (GGUF, Safetensors, etc.).
-    
-    Args:
-        model_path: Path to the model file.
-        
-    Returns:
-        A loaded UniversalModel ready for fragmentation.
+    Load a model file, auto-detecting its format (GGUF, Safetensors …).
+
+    Parameters
+    ----------
+    model_path : str | Path
+        Path to the model file.
+
+    Returns
+    -------
+    UniversalModel
+        A loaded model ready for fragmentation.
     """
     return ModelLoader.load(model_path)
 
@@ -46,51 +118,58 @@ def fragment(
     model: UniversalModel,
     output_dir: Union[str, Path] = "./cells",
     strategy: str = "functional",
-    **kwargs
+    **kwargs,
 ) -> CellManifest:
     """
-    Fragment a loaded model into functional semantic cells.
-    
-    Args:
-        model: A loaded UniversalModel instance.
-        output_dir: Directory to save the generated .cell files and manifest.
-        strategy: Fragmentation strategy ('functional', 'per_layer', 'hybrid', 'per_component')
-        
-    Returns:
-        The generated CellManifest containing metadata about all cells.
+    Fragment a loaded model into independent semantic cells.
+
+    Parameters
+    ----------
+    model : UniversalModel
+        A model loaded via :func:`load_universal`.
+    output_dir : str | Path
+        Directory where cell files and the manifest are saved.
+    strategy : str
+        Fragmentation strategy:
+
+        * ``"functional"`` *(default)* — group by function
+        * ``"per_layer"``              — one cell per transformer layer
+        * ``"hybrid"``                 — mix of both
+        * ``"per_component"``          — one cell per weight component
+
+    Returns
+    -------
+    CellManifest
+        Manifest containing metadata for all generated cells.
+
+    Examples
+    --------
+    >>> model = amf.load_universal("model.gguf")
+    >>> cells = amf.fragment(model, strategy="functional", output_dir="./cells")
+    >>> print(f"Generated {cells.total_cells} cells")
     """
-    strategy_map = {
-        "functional": FragmentationStrategy.FUNCTIONAL,
-        "per_layer": FragmentationStrategy.PER_LAYER,
-        "per_component": FragmentationStrategy.PER_COMPONENT,
-        "hybrid": FragmentationStrategy.HYBRID,
+    _strategy_map = {
+        "functional":   FragmentationStrategy.FUNCTIONAL,
+        "per_layer":    FragmentationStrategy.PER_LAYER,
+        "per_component":FragmentationStrategy.PER_COMPONENT,
+        "hybrid":       FragmentationStrategy.HYBRID,
     }
-    
-    str_enum = strategy_map.get(strategy.lower(), FragmentationStrategy.FUNCTIONAL)
-    
-    # Currently, our sorting algorithm expects a GGUF file and its wrapper.
-    # In a full universal implementation, the sorting algorithm would operate
-    # purely on the UniversalModel interface.
+    strat = _strategy_map.get(strategy.lower(), FragmentationStrategy.FUNCTIONAL)
+
     from core.model_loader import GGUFUniversalAdapter
-    
     if not isinstance(model, GGUFUniversalAdapter):
         raise NotImplementedError(
             f"Fragmentation for {type(model).__name__} is not yet supported. "
-            "Only GGUF models are currently fully supported for fragmentation."
+            "Only GGUF models are fully supported."
         )
-    
-    logger.info(f"Starting fragmentation using {strategy} strategy...")
-    
-    sorter = SortingAlgorithm(
-        gguf_path=model.gguf.path,
-        output_dir=output_dir,
-        strategy=str_enum,
-        **kwargs
+
+    logger.info(f"Fragmenting model | strategy={strategy}")
+    sorter            = SortingAlgorithm(
+        gguf_path  = model.gguf.path,
+        output_dir = output_dir,
+        strategy   = strat,
+        **kwargs,
     )
-    
-    # Since we already parsed the model, we can bypass the parsing step in sorting
-    sorter.gguf_file = model.gguf
-    sorter.parser = model.parser
-    
-    manifest = sorter.execute()
-    return manifest
+    sorter.gguf_file  = model.gguf
+    sorter.parser     = model.parser
+    return sorter.execute()

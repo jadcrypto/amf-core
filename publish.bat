@@ -1,47 +1,89 @@
 @echo off
-echo ============================================================
-echo 🚀 AMF-Core PyPI Publishing Script
-echo ============================================================
+REM ============================================================
+REM  AMF-Core v0.2.0 — Publish to PyPI + GitHub
+REM
+REM  Usage:
+REM    publish.bat <PYPI_TOKEN>
+REM
+REM  GitHub push uses the token stored in git credential manager.
+REM  To set it once:
+REM    git config --global credential.helper manager
+REM    (Windows will prompt for GitHub token on first push)
+REM ============================================================
 
-echo.
-echo [1/3] Checking prerequisites...
-python -m pip install --upgrade pip build twine
+SET VERSION=0.2.0
+SET GITHUB_USER=jadcrypto
+SET REPO=amf-core
 
-echo.
-echo [2/3] Cleaning old builds...
-if exist dist rmdir /s /q dist
-if exist build rmdir /s /q build
-if exist amf_core.egg-info rmdir /s /q amf_core.egg-info
+SET PYPI_TOKEN=%1
 
-echo.
-echo [3/3] Building the package (sdist ^& wheel)...
-python -m build
-
-echo.
-echo ============================================================
-echo ✅ Build complete! Ready to upload to PyPI.
-echo ============================================================
-echo.
-echo You will need your PyPI username and password (or API token).
-echo If using an API token, set username to __token__
-echo.
-set /p proceed="Do you want to upload to PyPI now? (y/n): "
-if /i "%proceed%"=="y" (
+IF "%PYPI_TOKEN%"=="" (
     echo.
-    echo ⬆️ Uploading via Twine...
-    python -m twine upload dist/*
-    if %ERRORLEVEL% EQU 0 (
-        echo.
-        echo 🎉 Congratulations! amf-core is now live on PyPI.
-        echo Anyone can now run: pip install amf-core
-    ) else (
-        echo.
-        echo ❌ Upload failed. Please check your credentials and try again.
-    )
-) else (
+    echo  ERROR: PyPI token not provided.
+    echo  Usage: publish.bat ^<PYPI_TOKEN^>
     echo.
-    echo 🛑 Upload cancelled. You can manually upload later by running:
-    echo python -m twine upload dist/*
+    exit /b 1
 )
 
-pause
+echo.
+echo  ===========================================================
+echo    AMF-Core v%VERSION% — Publishing
+echo  ===========================================================
+echo.
+
+REM ── 1. Clean ─────────────────────────────────────────────────
+echo  [1/4] Cleaning build artifacts...
+IF EXIST dist         rmdir /s /q dist
+IF EXIST build        rmdir /s /q build
+IF EXIST amf_core.egg-info rmdir /s /q amf_core.egg-info
+IF EXIST amf-core.egg-info rmdir /s /q amf-core.egg-info
+echo        Done.
+
+REM ── 2. Build ─────────────────────────────────────────────────
+echo.
+echo  [2/4] Building wheel and sdist...
+python -m build
+IF ERRORLEVEL 1 (
+    echo  ERROR: Build failed. Run: pip install build
+    exit /b 1
+)
+echo        Done.
+
+REM ── 3. PyPI upload ───────────────────────────────────────────
+echo.
+echo  [3/4] Uploading to PyPI...
+python -m twine upload dist/* ^
+    --username __token__ ^
+    --password %PYPI_TOKEN% ^
+    --non-interactive ^
+    --skip-existing
+IF ERRORLEVEL 1 (
+    echo  ERROR: PyPI upload failed.
+    exit /b 1
+)
+echo        Done.
+echo        https://pypi.org/project/amf-core/
+
+REM ── 4. GitHub ────────────────────────────────────────────────
+echo.
+echo  [4/4] Pushing to GitHub...
+git add -A
+git commit -m "release: v%VERSION% — AMFEngine molecular inference"
+git tag -a "v%VERSION%" -m "AMF-Core v%VERSION%" 2>nul || echo  Tag already exists, skipping.
+git remote set-url origin https://github.com/%GITHUB_USER%/%REPO%.git
+git push origin main --force-with-lease
+git push origin "v%VERSION%"
+IF ERRORLEVEL 1 (
+    echo  WARNING: Git push incomplete. Check credentials.
+) ELSE (
+    echo        Done.
+    echo        https://github.com/%GITHUB_USER%/%REPO%
+)
+
+echo.
+echo  ===========================================================
+echo    Published: amf-core v%VERSION%
+echo    PyPI  : https://pypi.org/project/amf-core/
+echo    GitHub: https://github.com/%GITHUB_USER%/%REPO%
+echo  ===========================================================
+echo.

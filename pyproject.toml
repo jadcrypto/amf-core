@@ -4,14 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "amf-core"
-version = "0.1.0"
-description = "Atomic Model Fragmentation (AMF) - Universal LLM Decomposition Library"
+version = "0.2.0"
+description = "Atomic Model Fragmentation (AMF) — Molecular Inference Engine for resource-constrained hardware"
 readme = "README.md"
-authors = [
-    { name = "Jad", email = "jad@example.com" }
-]
 license = { text = "MIT" }
-requires-python = ">=3.10"
+authors = [
+    { name = "Jad", email = "jadjbara@live.com" }
+]
+keywords = [
+    "llm", "inference", "gguf", "quantization",
+    "molecular-inference", "edge-ai", "low-memory",
+    "transformer", "fragmentation", "amf"
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -23,7 +27,9 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
 ]
+requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.24.0",
     "gguf>=0.6.0",
@@ -34,19 +40,23 @@ dependencies = [
 [project.optional-dependencies]
 safetensors = [
     "safetensors>=0.4.0",
-    "huggingface_hub>=0.20.0"
+    "huggingface_hub>=0.20.0",
+    "transformers>=4.40.0",
 ]
 dev = [
-    "pytest",
+    "pytest>=7.0",
+    "pytest-cov",
     "black",
     "flake8",
     "build",
-    "twine"
+    "twine",
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/yourusername/amf-core"
-"Bug Tracker" = "https://github.com/yourusername/amf-core/issues"
+"Homepage"    = "https://github.com/jadcrypto/amf-core"
+"Repository"  = "https://github.com/jadcrypto/amf-core"
+"Bug Tracker" = "https://github.com/jadcrypto/amf-core/issues"
+"PyPI"        = "https://pypi.org/project/amf-core/"
 
 [project.scripts]
 amf = "main:main"
@@ -55,5 +65,13 @@ amf = "main:main"
 py-modules = ["amf", "config", "main"]
 
 [tool.setuptools.packages.find]
-include = ["core*", "engine*", "cli*"]
-exclude = ["tests*", "docs*"]
+include  = ["core*", "engine*", "cli*"]
+exclude  = ["tests*", "docs*", "*.bak"]
+
+[tool.black]
+line-length    = 100
+target-version = ["py310", "py311", "py312"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts   = "-v --tb=short"
