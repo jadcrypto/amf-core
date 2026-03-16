@@ -69,70 +69,64 @@ class MolecularEngine:
 
     def __init__(
         self,
-        cells_dir: str | Path,
-        manifest_path: str | Path,
+        manifest_path: Union[str, Path],
+        cells_dir: Optional[Union[str, Path]] = None,
         max_memory_mb: int = 300,
         lru_size: int = 10,
     ):
-        self.cells_dir = Path(cells_dir)
         self.manifest_path = Path(manifest_path)
+        
+        if cells_dir:
+            self.cells_dir = Path(cells_dir)
+        else:
+            self.cells_dir = self.manifest_path.parent
+
         self.max_memory_mb = max_memory_mb
 
-        # Components
         self.manifest: Optional[CellManifest] = None
         self.cell_loader: Optional[CellLoader] = None
         self.intent_analyzer: Optional[IntentAnalyzer] = None
 
-        # State
         self._initialized = False
         self.stats = EngineStats()
 
     def initialize(self):
-        """
-        Initialize the engine:
-        1. Load cell manifest
-        2. Create cell loader
-        3. Load core cells (always in memory)
-        4. Initialize intent analyzer
-        """
         logger.info("=" * 50)
-        logger.info("Molecular Engine — Initializing")
+        logger.info("AMF Molecular Engine — Initializing")
+        logger.info(f"Manifest: {self.manifest_path}")
+        logger.info(f"Cells Dir: {self.cells_dir}")
         logger.info("=" * 50)
 
-        # Load manifest
-        if not self.manifest_path.exists():
+        if not self.manifest_path.is_file():
             raise FileNotFoundError(
-                f"Cell manifest not found: {self.manifest_path}\n"
-                "Run the Sorting Algorithm first to fragment the model."
+                f"Manifest file not found: {self.manifest_path}\n"
+                "Please verify the path or run the fragmentation process."
             )
 
-        self.manifest = CellManifest.load(self.manifest_path)
-        logger.info(f"Loaded manifest: {self.manifest.total_cells} cells")
+        try:
+            self.manifest = CellManifest.load(str(self.manifest_path))
+            logger.info(f"✅ Manifest loaded: {self.manifest.total_cells} cells")
+        except Exception as e:
+            logger.error(f"❌ Failed to load manifest: {e}")
+            raise
 
-        # Initialize cell loader
         self.cell_loader = CellLoader(
             cells_dir=self.cells_dir,
             max_memory_mb=self.max_memory_mb,
         )
 
-        # Load core cells
         core_cells = self.manifest.get_core_cells()
         for cell_def in core_cells:
             loaded = self.cell_loader.load(cell_def.cell_id)
-            if loaded is None:
-                logger.error(f"Failed to load core cell: {cell_def.cell_id}")
+            if loaded:
+                logger.info(f"🧠 Core cell active: {cell_def.cell_id} ({loaded.size_mb:.2f} MB)")
             else:
-                logger.info(
-                    f"Core cell loaded: {cell_def.cell_id} "
-                    f"({loaded.size_mb:.2f} MB)"
-                )
+                logger.error(f"⚠️ Failed to load core cell: {cell_def.cell_id}")
 
-        # Initialize intent analyzer
         self.intent_analyzer = IntentAnalyzer()
 
         self._initialized = True
-        logger.info("Molecular Engine — Ready")
-        self._log_memory_status()
+        logger.info("🚀 Molecular Engine — Fully Operational")
 
     def process(self, prompt: str) -> dict:
         """
